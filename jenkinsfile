@@ -62,15 +62,26 @@ pipeline {
                         values[headersArray[i]] = dataArray[i]
                     }
 
-                    // 5. Mostrar cada valor
+                    // 5. Guardar valores como variables de entorno y mostrar
                     values.each { key, val ->
-                        echo "${key} = ${val}"
+                        def varName = key.toUpperCase().replaceAll('[^A-Z0-9_]', '_')
+                        env."${varName}" = val
+                        echo "${varName} = ${env["${varName}"]}"
                     }
 
                     // 6. Guardar como CSV
                     def finalCSV = "${headers}\n${dataLine}"
                     writeFile file: 'result_with_headers.csv', text: finalCSV
                     echo "CSV generado correctamente como result_with_headers.csv"
+                }
+            }
+        }
+
+        stage('Usar valores extraídos') {
+            steps {
+                script {
+                    echo "Ejemplo de uso - APPNAME: ${env.APPNAME}"
+                    echo "Ejemplo de uso - PROYECTO: ${env.PROYECTO}"
                 }
             }
         }
