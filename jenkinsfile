@@ -62,9 +62,10 @@ pipeline {
                         values[headersArray.get(i)] = dataArray.get(i)
                     }
 
-                    // 5. Mostrar valores (usando .get para sandbox)
+                    // 5. Exportar valores como variables de entorno (compatibles con sandbox)
                     values.each { k, v ->
                         echo "${k} = ${v}"
+                        env."${k.toUpperCase()}" = v
                     }
 
                     // 6. Generar CSV
