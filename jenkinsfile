@@ -75,6 +75,24 @@ pipeline {
                 }
             }
         }
+
+        stage('Usar variables del entorno') {
+            steps {
+                script {
+                    echo "Uso de variables exportadas desde la base de datos:"
+                    echo "APPNAME = ${env.APPNAME}"
+                    echo "PROYECTO = ${env.PROYECTO}"
+                    echo "URLREPOSITORIO = ${env.URLREPOSITORIO}"
+
+                    // Puedes usarlas en lógica condicional también
+                    if (env.COUNTRY == 'CL') {
+                        echo 'Proyecto de Chile'
+                    } else {
+                        echo "Proyecto internacional: ${env.COUNTRY}"
+                    }
+                }
+            }
+        }
     }
 
     post {
