@@ -6,7 +6,7 @@ pipeline {
     agent any
 
     parameters {
-        string(name: 'APP_NAME', defaultValue: 'cwb-segurosnocobradosweb', description: 'Nombre de la app a consultar')
+        string(name: 'APP_NAME', defaultValue: 'mi-app-ejemplo', description: 'Nombre de la app a consultar')
     }
 
     environment {
@@ -17,10 +17,10 @@ pipeline {
     }
 
     stages {
-        stage('Obtener encabezados y datos') {
+        stage('Generar CSV desde la base de datos') {
             steps {
                 script {
-                    // 1. Consulta para extraer encabezados (column names)
+                    // 1. Obtener headers ordenados
                     def headerQuery = """
                         SELECT string_agg(column_name, ',' ORDER BY ordinal_position)
                         FROM information_schema.columns
@@ -34,9 +34,9 @@ pipeline {
                     def headers = rawHeaders.replaceAll('^\\s+|\\s+$', '')
                     def headersArray = headers.split(',') as List
 
-                    echo "Encabezados extraídos: ${headers}"
+                    echo "Encabezados extraídos (${headersArray.size()}): ${headers}"
 
-                    // 2. Consulta los datos por app_name
+                    // 2. Obtener datos por app_name
                     def app = params.APP_NAME
                     def dataQuery = """
                         SELECT * FROM projectinfo WHERE appname = '${app}';
@@ -47,32 +47,38 @@ pipeline {
                         returnStdout: true
                     )
                     def dataLine = rawData.replaceAll('^\\s+|\\s+$', '')
-                    def dataArray = dataLine.split(',') as List
+                    def dataArray = dataLine.split(',', -1) as List
 
-                    echo "Datos extraídos: ${dataArray}"
+                    echo "Datos extraídos (${dataArray.size()}): ${dataLine}"
 
-                    // 3. Validación segura de tamaños
+                    // 3. Validar cantidad de columnas
                     if (headersArray.size() != dataArray.size()) {
-                        error "Cantidad de columnas (${dataArray.size()}) no coincide con headers (${headersArray.size()})"
+                        error "ERROR: Cantidad de columnas (${dataArray.size()}) no coincide con headers (${headersArray.size()})"
                     }
 
-                    // 4. Crear mapa key:value para uso dinámico
+                    // 4. Crear mapa key:value
                     def values = [:]
                     for (int i = 0; i < headersArray.size(); i++) {
                         values[headersArray[i]] = dataArray[i]
                     }
 
-                    // 5. Mostrar los valores por nombre
+                    // 5. Mostrar cada valor
                     values.each { key, val ->
                         echo "${key} = ${val}"
                     }
 
-                    // 6. Escribir CSV con encabezado y fila de datos
+                    // 6. Guardar como CSV
                     def finalCSV = "${headers}\n${dataLine}"
                     writeFile file: 'result_with_headers.csv', text: finalCSV
-                    echo "Archivo CSV generado correctamente"
+                    echo "CSV generado correctamente como result_with_headers.csv"
                 }
             }
+        }
+    }
+
+    post {
+        always {
+            archiveArtifacts artifacts: 'result_with_headers.csv', onlyIfSuccessful: true
         }
     }
 }
