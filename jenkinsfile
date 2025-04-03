@@ -1,0 +1,78 @@
+def runAsDatabase(cmd) {
+    return "PGPASSWORD='${DB_PASSWORD}' psql -U ${DB_USER} -h ${DB_HOST} -d ${DB_NAME} ${cmd}"
+}
+
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'APP_NAME', defaultValue: 'cwb-segurosnocobradosweb', description: 'Nombre de la app a consultar')
+    }
+
+    environment {
+        DB_HOST = 'localhost'
+        DB_NAME = 'almdevops'
+        DB_USER = 'almDevopsAdmin'
+        DB_PASSWORD = 'tu_password'
+    }
+
+    stages {
+        stage('Obtener encabezados y datos') {
+            steps {
+                script {
+                    // 1. Consulta para extraer encabezados (column names)
+                    def headerQuery = """
+                        SELECT string_agg(column_name, ',' ORDER BY ordinal_position)
+                        FROM information_schema.columns
+                        WHERE table_name = 'projectinfo';
+                    """
+
+                    def rawHeaders = sh(
+                        script: runAsDatabase("-t -A -c \"${headerQuery}\""),
+                        returnStdout: true
+                    )
+                    def headers = rawHeaders.replaceAll('^\\s+|\\s+$', '')
+                    def headersArray = headers.split(',') as List
+
+                    echo "Encabezados extraídos: ${headers}"
+
+                    // 2. Consulta los datos por app_name
+                    def app = params.APP_NAME
+                    def dataQuery = """
+                        SELECT * FROM projectinfo WHERE appname = '${app}';
+                    """
+
+                    def rawData = sh(
+                        script: runAsDatabase("-t -A -F ',' -c \"${dataQuery}\""),
+                        returnStdout: true
+                    )
+                    def dataLine = rawData.replaceAll('^\\s+|\\s+$', '')
+                    def dataArray = dataLine.split(',') as List
+
+                    echo "Datos extraídos: ${dataArray}"
+
+                    // 3. Validación segura de tamaños
+                    if (headersArray.size() != dataArray.size()) {
+                        error "Cantidad de columnas (${dataArray.size()}) no coincide con headers (${headersArray.size()})"
+                    }
+
+                    // 4. Crear mapa key:value para uso dinámico
+                    def values = [:]
+                    for (int i = 0; i < headersArray.size(); i++) {
+                        values[headersArray[i]] = dataArray[i]
+                    }
+
+                    // 5. Mostrar los valores por nombre
+                    values.each { key, val ->
+                        echo "${key} = ${val}"
+                    }
+
+                    // 6. Escribir CSV con encabezado y fila de datos
+                    def finalCSV = "${headers}\n${dataLine}"
+                    writeFile file: 'result_with_headers.csv', text: finalCSV
+                    echo "Archivo CSV generado correctamente"
+                }
+            }
+        }
+    }
+}
