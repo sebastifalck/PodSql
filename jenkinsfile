@@ -20,7 +20,7 @@ pipeline {
         stage('Generar CSV desde la base de datos') {
             steps {
                 script {
-                    // 1. Obtener headers ordenados
+                    // 1. Obtener encabezados (columnas) ordenados
                     def headerQuery = """
                         SELECT string_agg(column_name, ',' ORDER BY ordinal_position)
                         FROM information_schema.columns
@@ -36,7 +36,7 @@ pipeline {
 
                     echo "Encabezados extraídos (${headersArray.size()}): ${headers}"
 
-                    // 2. Obtener datos por app_name
+                    // 2. Consultar datos por app_name
                     def app = params.APP_NAME
                     def dataQuery = """
                         SELECT * FROM projectinfo WHERE appname = '${app}';
@@ -56,40 +56,29 @@ pipeline {
                         error "ERROR: Cantidad de columnas (${dataArray.size()}) no coincide con headers (${headersArray.size()})"
                     }
 
-                    // 4. Crear mapa key:value
+                    // 4. Crear mapa key:value sin usar métodos prohibidos
                     def values = [:]
                     for (int i = 0; i < headersArray.size(); i++) {
-                        values[headersArray[i]] = dataArray[i]
+                        values[headersArray.get(i)] = dataArray.get(i)
                     }
 
-                    // 5. Guardar valores como variables de entorno y mostrar
-                    values.each { key, val ->
-                        def varName = key.toUpperCase().replaceAll('[^A-Z0-9_]', '_')
-                        env."${varName}" = val
-                        echo "${varName} = ${env["${varName}"]}"
+                    // 5. Mostrar valores (usando .get para sandbox)
+                    values.each { k, v ->
+                        echo "${k} = ${v}"
                     }
 
-                    // 6. Guardar como CSV
+                    // 6. Generar CSV
                     def finalCSV = "${headers}\n${dataLine}"
                     writeFile file: 'result_with_headers.csv', text: finalCSV
                     echo "CSV generado correctamente como result_with_headers.csv"
                 }
             }
         }
-
-        stage('Usar valores extraídos') {
-            steps {
-                script {
-                    echo "Ejemplo de uso - APPNAME: ${env.APPNAME}"
-                    echo "Ejemplo de uso - PROYECTO: ${env.PROYECTO}"
-                }
-            }
-        }
     }
 
     post {
-        always {
-            archiveArtifacts artifacts: 'result_with_headers.csv', onlyIfSuccessful: true
+        success {
+            archiveArtifacts artifacts: 'result_with_headers.csv'
         }
     }
 }
